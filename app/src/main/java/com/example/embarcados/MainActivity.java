@@ -13,9 +13,17 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 
+
+// Load OpenCV native library before using:
+//
+// - avoid using of "OpenCVLoader.initAsync()" approach - it is deprecated
+//   It may load library with different version (from OpenCV Android Manager, which is installed separately on device)
+//
+// - use "System.loadLibrary("opencv_java4")" or "OpenCVLoader.initDebug()"
+
 public class MainActivity extends AppCompatActivity {
     // Define the pic id
-    private static final int pic_id = 157;
+    private static final int pic_id = 666;
 
     // Define the button and imageview type variable
     Button camera_open_id;

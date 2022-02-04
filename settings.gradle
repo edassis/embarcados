@@ -14,3 +14,11 @@ dependencyResolutionManagement {
 }
 rootProject.name = "Embarcados"
 include ':app'
+
+// User must set $OPENCV_PATH environment variable before open Android Studio
+// https://github.com/opencv/opencv/blob/master/modules/java/android_sdk/build.gradle.in
+// Change this to local user config.
+def opencv_path = System.getenv('OPENCV_PATH')
+//println(opencv_path + '/sdk')
+include ':opencv'
+project(':opencv').projectDir = new File(opencv_path + '/sdk')
