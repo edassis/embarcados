@@ -1,76 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.embarcados">
+    package="com.example.embarcados"
+    >
 
     <application
-        android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Embarcados">
-        <activity
-            android:name=".MainActivity"
+        android:icon="@drawable/icon"
+        android:theme="@android:style/Theme.NoTitleBar.Fullscreen" >
+
+        <activity android:name=".Frames"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboardHidden|orientation"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
     </application>
+
+    <supports-screens android:resizeable="true"
+        android:smallScreens="true"
+        android:normalScreens="true"
+        android:largeScreens="true"
+        android:anyDensity="true" />
+
+    <uses-permission android:name="android.permission.CAMERA"/>
+
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.front" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.front.autofocus" android:required="false"/>
 
 </manifest>
 <!--<?xml version="1.0" encoding="utf-8"?>-->
 <!--<manifest xmlns:android="http://schemas.android.com/apk/res/android"-->
 <!--    package="com.example.embarcados">-->
 
-<!--    <supports-screens-->
-<!--        android:anyDensity="true"-->
-<!--        android:largeScreens="true"-->
-<!--        android:normalScreens="true"-->
-<!--        android:resizeable="true"-->
-<!--        android:smallScreens="true" />-->
+<!--    <uses-feature android:name="android.hardware.camera"-->
+<!--        android:required="true" />-->
 
-<!--    <uses-permission android:name="android.permission.CAMERA" />-->
+<!--&lt;!&ndash;    <queries>&ndash;&gt;-->
+<!--&lt;!&ndash;        <intent>&ndash;&gt;-->
+<!--&lt;!&ndash;                <action android:name="android.intent."&ndash;&gt;-->
+<!--&lt;!&ndash;        </intent>&ndash;&gt;-->
+<!--&lt;!&ndash;        <package android:name="com.example.store" />&ndash;&gt;-->
+<!--&lt;!&ndash;        <package android:name="com.example.services" />&ndash;&gt;-->
+<!--&lt;!&ndash;    </queries>&ndash;&gt;-->
 
-<!--    <uses-feature-->
-<!--        android:name="android.hardware.camera"-->
-<!--        android:required="false" />-->
-<!--    <uses-feature-->
-<!--        android:name="android.hardware.camera.autofocus"-->
-<!--        android:required="false" />-->
-<!--    <uses-feature-->
-<!--        android:name="android.hardware.camera.front"-->
-<!--        android:required="false" />-->
-<!--    <uses-feature-->
-<!--        android:name="android.hardware.camera.front.autofocus"-->
-<!--        android:required="false" />-->
 
 <!--    <application-->
-<!--        android:icon="@drawable/icon"-->
+<!--        android:allowBackup="true"-->
+<!--        android:icon="@mipmap/ic_launcher"-->
 <!--        android:label="@string/app_name"-->
-<!--        android:theme="@android:style/Theme.NoTitleBar.Fullscreen"-->
-<!--        android:supportsRtl="true">-->
-
-<!--        &lt;!&ndash;                <activity android:name=".MainActivity"&ndash;&gt;-->
-<!--        &lt;!&ndash;                          android:label="@string/app_name"&ndash;&gt;-->
-<!--        &lt;!&ndash;                          android:screenOrientation="landscape"&ndash;&gt;-->
-<!--        &lt;!&ndash;                          android:configChanges="keyboardHidden|orientation"&ndash;&gt;-->
-<!--        &lt;!&ndash;                          android:exported="true">&ndash;&gt;-->
-<!--        &lt;!&ndash;                    <intent-filter>&ndash;&gt;-->
-<!--        &lt;!&ndash;                        <action android:name="android.intent.action.MAIN" />&ndash;&gt;-->
-<!--        &lt;!&ndash;                        <category android:name="android.intent.category.LAUNCHER" />&ndash;&gt;-->
-<!--        &lt;!&ndash;                    </intent-filter>&ndash;&gt;-->
-<!--        &lt;!&ndash;                </activity>&ndash;&gt;-->
+<!--        android:roundIcon="@mipmap/ic_launcher_round"-->
+<!--        android:supportsRtl="true"-->
+<!--        android:theme="@style/Theme.Embarcados">-->
 <!--        <activity-->
 <!--            android:name=".MainActivity"-->
 <!--            android:exported="true">-->
 <!--            <intent-filter>-->
 <!--                <action android:name="android.intent.action.MAIN" />-->
-
 <!--                <category android:name="android.intent.category.LAUNCHER" />-->
 <!--            </intent-filter>-->
 <!--        </activity>-->
 <!--    </application>-->
+
 <!--</manifest>-->

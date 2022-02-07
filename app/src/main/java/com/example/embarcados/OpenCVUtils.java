@@ -2,6 +2,10 @@ package com.example.embarcados;
 
 
 import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.videoio.VideoCapture;
+import org.opencv.videoio.Videoio;
 
 public class OpenCVUtils {
     public OpenCVUtils() {
