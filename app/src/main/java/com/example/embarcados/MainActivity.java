@@ -3,6 +3,7 @@ package com.example.embarcados;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -12,6 +13,9 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+
+import java.io.FileDescriptor;
+import java.io.FileNotFoundException;
 
 
 // Load OpenCV native library before using:
@@ -23,7 +27,8 @@ import android.widget.ImageView;
 
 public class MainActivity extends AppCompatActivity {
     // Define the pic id
-    private static final int pic_id = 666;
+    private static final int REQUEST_VIDEO_CAPTURED = 666;
+    private static final int REQUEST_OK = 0;
 
     // Define the button and imageview type variable
     Button camera_open_id;
@@ -33,6 +38,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Load opencv library
+        System.loadLibrary("opencv_java4");
 
         // By ID we can get each component
         // which id is assigned in XML file
@@ -51,12 +59,13 @@ public class MainActivity extends AppCompatActivity {
 
                 // Start the activity with camera_intent,
                 // and request pic id
-                startActivityForResult(camera_intent, pic_id);
+                startActivityForResult(camera_intent, REQUEST_VIDEO_CAPTURED);
             }
         });
     }
 
     // This method will help to retrieve the image
+    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         // Match the request 'pic id with requestCode
         super.onActivityResult(requestCode, resultCode, data);
@@ -64,13 +73,36 @@ public class MainActivity extends AppCompatActivity {
         Log.d("D","FON2 " + String.valueOf(data));
 
         Uri vid = data.getData();
+//        // Play video on default application
+//        Intent openVid = new Intent(Intent.ACTION_VIEW);
+//        openVid.setDataAndType(vid, "video/*");
+//        openVid.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);//DO NOT FORGET THIS EVER
+//        startActivity(openVid);
 
-        Intent openVid = new Intent(Intent.ACTION_VIEW);
-        openVid.setDataAndType(vid, "video/*");
-        openVid.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);//DO NOT FORGET THIS EVER
-        startActivity(openVid);
+        // Get video path/*
+        /* Try to open the file for "read" access using the
+        * returned URI. If the file isn't found, write to the
+        * error log and return.
+        */
+        ParcelFileDescriptor inputPFD;
+        try {
+            /*
+             * Get the content resolver instance for this context, and use it
+             * to get a ParcelFileDescriptor for the file.
+             */
+            inputPFD = getContentResolver().openFileDescriptor(vid, "r");
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            Log.e("MainActivity", "File not found.");
+            return;
+        }
+        // Get a regular file descriptor for the file
+        FileDescriptor fd = inputPFD.getFileDescriptor();
 
-        if (requestCode == pic_id) {
+
+        // Extract 2 frames from files using opencv
+
+//        if (requestCode == pic_id) {
 //            // BitMap is data structure of image file
 //            // which stor the image in memory
 //            Bitmap photo = (Bitmap) data.getExtras().get("data");
