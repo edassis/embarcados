@@ -3,8 +3,13 @@
   <component name="DesignSurface">
     <option name="filePathToZoomLevelMap">
       <map>
+        <entry key="../../program_files/opencv-4.5.5-android-sdk/OpenCV-android-sdk/sdk/java/res/layout/frames.xml" value="0.18229166666666666" />
         <entry key="..\:/Users/eduar/AndroidStudioProjects/embarcados/app/src/main/res/layout/tutorial1_surface_view.xml" value="0.19166666666666668" />
+        <entry key="app/src/main/res/drawable-v24/ic_launcher_foreground.xml" value="0.147" />
+        <entry key="app/src/main/res/drawable/ic_launcher_background.xml" value="0.147" />
         <entry key="app/src/main/res/layout/activity_main.xml" value="0.33" />
+        <entry key="app/src/main/res/layout/frames_surface_view.xml" value="0.23177083333333334" />
+        <entry key="app/src/main/res/layout/tutorial1_surface_view.xml" value="0.23177083333333334" />
       </map>
     </option>
   </component>

@@ -1,135 +1,187 @@
 package com.example.embarcados;
 
-import android.content.Intent;
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.CameraActivity;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Mat;
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
+import org.opencv.core.MatOfByte;
+import org.opencv.core.Size;
+import org.opencv.core.Point;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.imgcodecs.Imgcodecs;
+
+import android.content.ContentValues;
 import android.net.Uri;
-import android.os.Bundle;
 import android.provider.MediaStore;
+import android.view.MotionEvent;
+import android.os.Bundle;
 import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.ImageView;
+import android.view.MenuItem;
+import android.view.SurfaceView;
+import android.view.WindowManager;
+import android.widget.Toast;
 
-import androidx.appcompat.app.AppCompatActivity;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
-import org.opencv.videoio.VideoCapture;
+public class MainActivity extends CameraActivity implements CvCameraViewListener2 {
+    private static final String TAG = "OCVSample::Activity";
 
-import java.net.URI;
-import java.net.URISyntaxException;
+    private CameraBridgeViewBase mOpenCvCameraView;
+    private boolean              mIsJavaCamera = true;
+    private MenuItem             mItemSwitchCamera = null;
 
+    private Mat m_current_RGBA;
+    private Mat m_current_Gray;
+    
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS:
+                {
+                    Log.i(TAG, "OpenCV loaded successfully");
+                    mOpenCvCameraView.enableView();
 
-// Load OpenCV native library before using:
-//
-// - avoid using of "OpenCVLoader.initAsync()" approach - it is deprecated
-//   It may load library with different version (from OpenCV Android Manager, which is installed separately on device)
-//
-// - use "System.loadLibrary("opencv_java4")" or "OpenCVLoader.initDebug()"
+                    // initialize opencv variables
+                    m_current_RGBA = new Mat();
+                    m_current_Gray = new Mat();
+                } break;
+                default:
+                {
+                    super.onManagerConnected(status);
+                } break;
+            }
+        }
+    };
 
-public class MainActivity extends AppCompatActivity {
-    // Define the pic id
-    private static final int REQUEST_VIDEO_CAPTURE = 666;
-//    private static final int REQUEST_OK = 0;
+    public MainActivity() {
+        Log.i(TAG, "Instantiated new " + this.getClass());
+    }
 
-    // Define the button and imageview type variable
-    Button camera_open_id;
-    ImageView click_image_id;
-
-//    private static final Uri videoUri;
-
+    /** Called when the activity is first created. */
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
+        Log.i(TAG, "called onCreate");
         super.onCreate(savedInstanceState);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         setContentView(R.layout.activity_main);
 
-        // Load opencv library
-        System.loadLibrary("opencv_java4");
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.main_java_surface_view);
 
-        // By ID we can get each component
-        // which id is assigned in XML file
-        // get Buttons and imageview.
-        camera_open_id = (Button)findViewById(R.id.camera_button);
-        click_image_id = (ImageView)findViewById(R.id.click_image);
+        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
 
-        // Camera_open button is for open the camera
-        // and add the setOnClickListener in this button
-        camera_open_id.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                dispatchTakeVideoIntent();
-            }
-        });
+        mOpenCvCameraView.setCvCameraViewListener(this);
     }
 
-    private void dispatchTakeVideoIntent() {
-        Intent takeVideoIntent = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
-        startActivityForResult(takeVideoIntent, REQUEST_VIDEO_CAPTURE);
-//        if (takeVideoIntent.resolveActivity(getPackageManager()) != null) {
-//        }
-    }
-
-    // This method will help to retrieve the image
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-//        if (requestCode == REQUEST_VIDEO_CAPTURED && resultCode == RESULT_OK) {
+    public void onPause() {
+        super.onPause();
+        if (mOpenCvCameraView != null)
+            mOpenCvCameraView.disableView();
+    }
 
-        // Match the request 'pic id with requestCode
-        super.onActivityResult(requestCode, resultCode, data);
-//        Log.d("Debug",String.valueOf(requestCode));
-//        Log.d("Debug",String.valueOf(data));
-
-        Uri videoUri = data.getData();
-
-        Log.d("Debug", videoUri.getEncodedPath());
-
-//        // Play video on default application
-//        Intent openVid = new Intent(Intent.ACTION_VIEW);
-//        openVid.setDataAndType(vid, "video/*");
-//        openVid.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);//DO NOT FORGET THIS EVER
-//        startActivity(openVid);
-
-        // Get video path
-
-//        /* Try to open the file for "read" access using the
-//        * returned URI. If the file isn't found, write to the
-//        * error log and return.
-//        */
-//        ParcelFileDescriptor inputPFD;
-//        try {
-//            /*
-//             * Get the content resolver instance for this context, and use it
-//             * to get a ParcelFileDescriptor for the file.
-//             */
-//            inputPFD = getContentResolver().openFileDescriptor(videoUri, "r");
-//        } catch (FileNotFoundException e) {
-//            e.printStackTrace();
-//            Log.d("Debug", "File not found.");
-//            return;
-//        }
-//        // Get a regular file descriptor for the file
-//        FileDescriptor videoFD = inputPFD.getFileDescriptor();
-//        FileInputStream videoInputStream = new FileInputStream(videoFD);
-        // What to do with fileinputstream? Better get file's string path.
-        URI videoJavaURI = null;
-        try {
-            videoJavaURI = new URI(videoUri.getPath());
-        } catch (URISyntaxException e) {
-            e.printStackTrace();
-        }
-        VideoCapture videoCap = new VideoCapture(videoUri.getEncodedPath());
-        if(videoCap.isOpened()) {
-            Log.d("Debug", "Video capture opened.");
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!OpenCVLoader.initDebug()) {
+            Log.d(TAG, "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_0_0, this, mLoaderCallback);
         } else {
-            Log.d("Debug", "Video capture fail.");
+            Log.d(TAG, "OpenCV library found inside package. Using it!");
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         }
+    }
 
-        // Extract 2 frames from files using opencv
+    @Override
+    protected List<? extends CameraBridgeViewBase> getCameraViewList() {
+        return Collections.singletonList(mOpenCvCameraView);
+    }
 
-//        if (requestCode == pic_id) {
-//            // BitMap is data structure of image file
-//            // which stor the image in memory
-//            Bitmap photo = (Bitmap) data.getExtras().get("data");
+    public void onDestroy() {
+        super.onDestroy();
+        if (mOpenCvCameraView != null)
+            mOpenCvCameraView.disableView();
+    }
+
+    public void onCameraViewStarted(int width, int height) {}
+
+    public void onCameraViewStopped() {}
+
+    public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+        Mat src = inputFrame.rgba().clone();
+        Mat dst = new Mat();
+
+//        double angle = 90;  // or 270
+//        Size src_sz = src.size();
+//        Size dst_sz = new Size(src_sz.height, src_sz.width);
 //
-//            // Set the image in imageview for display
-//            click_image_id.setImageBitmap(photo);
-//        }
+//        int len = Math.max(src.cols(), src.rows());
+//        Point center = new Point(len/2., len/2.);
+//        Mat rot_mat = Imgproc.getRotationMatrix2D(center, angle, 1.0);
+//        Imgproc.warpAffine(src, dst, rot_mat, dst_sz);
+
+//        m_current_RGBA = dst;
+        m_current_RGBA = src;
+
+        Imgproc.cvtColor(m_current_RGBA, m_current_Gray, Imgproc.COLOR_RGBA2GRAY);
+
+        return m_current_RGBA;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+//        super.onTouchEvent(event);
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            savePicture();
+        }
+        return true;
+    }
+
+    public void savePicture() {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault());
+        String curDateTime = sdf.format(new Date());
+
+        String fileName = "SampleImage_"+curDateTime+".jpg";
+
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        values.put(MediaStore.Images.Media.DATE_ADDED, System.currentTimeMillis()/1000);
+        values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+        values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/"+"opencv");
+        values.put(MediaStore.Images.Media.IS_PENDING, true);
+
+        Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+
+        try {
+            if (uri != null) {
+                OutputStream os = getContentResolver().openOutputStream(uri);
+
+                MatOfByte matOfByte = new MatOfByte();
+                Imgcodecs.imencode(".jpg", m_current_Gray, matOfByte);
+
+                os.write(matOfByte.toArray());
+                os.close();
+
+                values.put(MediaStore.Images.Media.IS_PENDING, false);
+                getContentResolver().update(uri, values, null, null);
+            }
+            Log.d(TAG, "Imagem " + fileName + " salva!");
+            Toast.makeText(this, fileName + " salva!", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            Log.d(TAG, "Falha ao salvar imagem.");
+            e.printStackTrace();
+            finish();
+            System.exit(0);
+        }
     }
 }
