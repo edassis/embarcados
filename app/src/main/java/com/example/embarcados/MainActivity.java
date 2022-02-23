@@ -5,6 +5,7 @@ import org.opencv.android.CameraActivity;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
@@ -227,28 +228,19 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     }
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-        Mat src = inputFrame.rgba().clone();
-        Mat dst = new Mat();
-
-//        double angle = 90;  // or 270
-//        Size src_sz = src.size();
-//        Size dst_sz = new Size(src_sz.height, src_sz.width);
-//
-//        int len = Math.max(src.cols(), src.rows());
-//        Point center = new Point(len/2., len/2.);
-//        Mat rot_mat = Imgproc.getRotationMatrix2D(center, angle, 1.0);
-//        Imgproc.warpAffine(src, dst, rot_mat, dst_sz);
-
-//        m_current_RGBA = dst;
-        mCurrentRGBA = src;
-
+        mCurrentRGBA = inputFrame.rgba().clone();
         Imgproc.cvtColor(mCurrentRGBA, mCurrentGray, Imgproc.COLOR_RGBA2GRAY);
 
         if (mIsRecording) {
             saveVideo();
         }
 
-        return mCurrentRGBA;
+        // Flip 90 degrees anti clockwise
+        Mat mRGBAT = mCurrentRGBA.t();
+        Core.flip(mRGBAT, mRGBAT, 1);
+        Imgproc.resize(mRGBAT, mRGBAT,  mCurrentRGBA.size());
+        return mRGBAT;
+//        return mCurrentRGBA;
     }
 
     @Override
