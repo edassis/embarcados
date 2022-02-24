@@ -19,8 +19,6 @@ import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Color;
-import android.media.CamcorderProfile;
-import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
@@ -37,8 +35,6 @@ import android.widget.ImageView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
@@ -59,6 +55,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     //    private MediaRecorder mRecorder;
     private VideoWriter mVideoWriter;
     private ImageView mVideoCameraButton;
+    private String mVideoFileName;
     private boolean mIsRecording;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
@@ -102,9 +99,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         setContentView(R.layout.activity_main);
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.main_java_surface_view);
-
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-
         mOpenCvCameraView.setCvCameraViewListener(this);
 
         mVideoCameraButton = (ImageView) findViewById(R.id.video_button);
@@ -119,6 +114,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
                 if (motionEvent.getAction() == MotionEvent.ACTION_DOWN) {
+                    Context context = getApplicationContext();
                     mIsRecording = !mIsRecording;
                     File videoFile;
 
@@ -127,7 +123,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                             SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault());
                             String curDateTime = sdf.format(new Date());
 
-                            String fileName = "SampleVideo_" + curDateTime + ".avi";
+                            mVideoFileName = "SampleVideo_" + curDateTime + ".avi";
 
 //                            ContentValues values = new ContentValues();
 //                            values.put(MediaStore.Video.Media.MIME_TYPE, "video/avi");
@@ -137,11 +133,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 //                            values.put(MediaStore.Video.Media.IS_PENDING, true);
 //
 //                            Uri uri = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
-//                            File root = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS);
 //                            File path = getExternalFilesDir(null);
                             File path = Environment.getExternalStoragePublicDirectory(
                                     Environment.DIRECTORY_PICTURES);
-                            videoFile = new File(path, fileName);
+                            videoFile = new File(path, mVideoFileName);
                             if(!videoFile.exists()) {
                                 try {
                                     videoFile.createNewFile();
@@ -152,37 +147,38 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 //                            File file = new File(uri);
 //                            File opencvDir = commonDocumentDirPath("opencv");
 //                            File file = new File(opencvDir, "fileName");
-                            Log.d(TAG, "arquivo existe? " + fileName + " " + (videoFile.exists() ? "Sim" : "Não"));
-                            Log.d(TAG, "pode escrever no arquivo " + fileName + " " + (videoFile.canWrite() ? "Sim" : "Não"));
+                            Log.d(TAG, "arquivo existe? " + mVideoFileName + " " + (videoFile.exists() ? "Sim" : "Não"));
+                            Log.d(TAG, "pode escrever no arquivo " + mVideoFileName + " " + (videoFile.canWrite() ? "Sim" : "Não"));
 
                             Size screenSize = new Size(640, 480);
                             Log.d(TAG, "Video file path: " + videoFile.getAbsolutePath());
 //                            mVideoWriter.open(uri.getPath(), VideoWriter.fourcc('M','J','P','G'), 30, screenSize);
-                            mVideoWriter.open(videoFile.getAbsolutePath(), VideoWriter.fourcc('M', 'J', 'P', 'G'), 30, screenSize);
+                            mVideoWriter.open(videoFile.getAbsolutePath(), VideoWriter.fourcc('M', 'J', 'P', 'G'), 10, screenSize);
                             if (mVideoWriter.isOpened()) {
                                 Log.d(TAG, "Sucesso ao abrir arquivo de video para escrita.");
-                                Context context = getApplicationContext();
-                                Toast.makeText(context, fileName + " aberto!", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(context, mVideoFileName + " aberto!", Toast.LENGTH_SHORT).show();
                             } else {
                                 Log.d(TAG, "Erro ao abrir arquivo de video para escrita.");
                             }
                         }
                         mVideoCameraButton.setColorFilter(Color.RED);
                     } else { // Not recording (disable recording)
-                        mVideoWriter.release();
-                        mVideoCameraButton.setColorFilter(Color.WHITE);
+                        if(mVideoWriter.isOpened()) {
+                            Toast.makeText(context, mVideoFileName + " salvo!", Toast.LENGTH_SHORT).show();
+                            mVideoWriter.release();
 
-                        // Tell the media scanner about the new file so that it is
-                        // immediately available to the user.
-                        MediaScannerConnection.scanFile(getApplicationContext(),
-                                new String[] { mVideoWriter.toString() }, null,
-                                new MediaScannerConnection.OnScanCompletedListener() {
-                                    public void onScanCompleted(String path, Uri uri) {
-                                        Log.i("ExternalStorage", "Scanned " + path + ":");
-                                        Log.i("ExternalStorage", "-> uri=" + uri);
+                            // Tell the media scanner about the new file so that it is
+                            // immediately available to the user.
+                            MediaScannerConnection.scanFile(getApplicationContext(),
+                                    new String[] { mVideoWriter.toString() }, null,
+                                    new MediaScannerConnection.OnScanCompletedListener() {
+                                        public void onScanCompleted(String path, Uri uri) {
+                                            Log.i("ExternalStorage", "Scanned " + path + ":");
+                                            Log.i("ExternalStorage", "-> uri=" + uri);
+                                        }
                                     }
-                                }
-                        );
+                            );    mVideoCameraButton.setColorFilter(Color.WHITE);
+                        }
                     }
                     return true;
                 }
@@ -229,16 +225,19 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         mCurrentRGBA = inputFrame.rgba().clone();
-        Imgproc.cvtColor(mCurrentRGBA, mCurrentGray, Imgproc.COLOR_RGBA2GRAY);
-
-        if (mIsRecording) {
-            saveVideo();
-        }
 
         // Flip 90 degrees anti clockwise
         Mat mRGBAT = mCurrentRGBA.t();
         Core.flip(mRGBAT, mRGBAT, 1);
         Imgproc.resize(mRGBAT, mRGBAT,  mCurrentRGBA.size());
+        mCurrentRGBA = mRGBAT;
+
+        Imgproc.cvtColor(mCurrentRGBA, mCurrentGray, Imgproc.COLOR_RGBA2GRAY);
+
+        if (mIsRecording) {
+            saveVideoFrame();
+        }
+
         return mRGBAT;
 //        return mCurrentRGBA;
     }
@@ -290,7 +289,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         }
     }
 
-    public void saveVideo() {
+    public void saveVideoFrame() {
         mVideoWriter.write(mCurrentRGBA);
     }
 
