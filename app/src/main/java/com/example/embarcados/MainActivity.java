@@ -239,8 +239,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         mCurrentRGBA = mRGBAT;
 
         // Draw rectangle on screen
-        Imgproc.rectangle(mCurrentRGBA, new Point( 220, 140 ),
-                new Point(320, 240),
+        int width = mCurrentRGBA.width();
+        int height = mCurrentRGBA.height();
+        Imgproc.rectangle(mCurrentRGBA, new Point( width/2-100, height/2-100),
+                new Point(width/2+100, height/2+100),
                 new Scalar( 255, 0, 0 ), 3);
 
         Imgproc.cvtColor(mCurrentRGBA, mCurrentGray, Imgproc.COLOR_RGBA2GRAY);
@@ -285,15 +287,21 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             OutputStream osB = getContentResolver().openOutputStream(uriB);
             OutputStream osR = getContentResolver().openOutputStream(uriR);
 
-            // 640x480
-            Rect roi = new Rect(220, 140, 100, 100);
-            Mat cropped = new Mat(mCurrentRGBA, roi);
+
+            Mat frameToStore = new Mat();
+            Imgproc.cvtColor(mCurrentRGBA, frameToStore, Imgproc.COLOR_RGBA2BGR);
+
+            int width = frameToStore.width();
+            int height = frameToStore.height();
+
+            Rect roi = new Rect(width/2-100, height/2-100, 200, 200);
+            Mat cropped = new Mat(frameToStore, roi);
             List<Mat> bgr = new ArrayList<Mat>(3);
             Core.split(cropped, bgr);
 
             MatOfByte matOfByte = new MatOfByte();
 //            Imgcodecs.imencode(".jpg", mCurrentGray, matOfByte);
-            Imgcodecs.imencode(".jpg", mCurrentGray, matOfByte);
+            Imgcodecs.imencode(".jpg", frameToStore, matOfByte);
             os.write(matOfByte.toArray());
 
             Imgcodecs.imencode(".jpg", bgr.get(0), matOfByte);
@@ -301,7 +309,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
             Imgcodecs.imencode(".jpg", bgr.get(2), matOfByte);
             osR.write(matOfByte.toArray());
-//            Imgcodecs.imencode(".jpg", cropped, matOfByte);
 
             os.close();
             osB.close();
