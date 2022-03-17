@@ -6,6 +6,8 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
+import org.opencv.core.Scalar;
+import org.opencv.core.Point;
 import org.opencv.core.Mat;
 import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
@@ -231,6 +233,13 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Core.flip(mRGBAT, mRGBAT, 1);
         Imgproc.resize(mRGBAT, mRGBAT,  mCurrentRGBA.size());
         mCurrentRGBA = mRGBAT;
+
+        int cameraWidth = mRGBAT.width();
+
+        Imgproc.rectangle(mRGBAT, new Point( 400, 130 ),
+                new Point(cameraWidth-400, 230),
+                new Scalar( 255, 0, 0 ), 5);
+
 
         Imgproc.cvtColor(mCurrentRGBA, mCurrentGray, Imgproc.COLOR_RGBA2GRAY);
 
