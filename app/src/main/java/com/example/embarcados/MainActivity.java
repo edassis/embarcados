@@ -6,6 +6,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Point;
 import org.opencv.core.Mat;
@@ -39,7 +40,10 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -234,12 +238,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Imgproc.resize(mRGBAT, mRGBAT,  mCurrentRGBA.size());
         mCurrentRGBA = mRGBAT;
 
-        int cameraWidth = mRGBAT.width();
-
-        Imgproc.rectangle(mRGBAT, new Point( 400, 130 ),
-                new Point(cameraWidth-400, 230),
-                new Scalar( 255, 0, 0 ), 5);
-
+        // Draw rectangle on screen
+        Imgproc.rectangle(mCurrentRGBA, new Point( 220, 140 ),
+                new Point(320, 240),
+                new Scalar( 255, 0, 0 ), 3);
 
         Imgproc.cvtColor(mCurrentRGBA, mCurrentGray, Imgproc.COLOR_RGBA2GRAY);
 
@@ -247,8 +249,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             saveVideoFrame();
         }
 
-        return mRGBAT;
-//        return mCurrentRGBA;
+        return mCurrentRGBA;
     }
 
     @Override
@@ -274,19 +275,43 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         values.put(MediaStore.Images.Media.IS_PENDING, true);
 
         Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        Uri uriB = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        Uri uriR = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+
         if (uri == null) return;
 
         try {
             OutputStream os = getContentResolver().openOutputStream(uri);
+            OutputStream osB = getContentResolver().openOutputStream(uriB);
+            OutputStream osR = getContentResolver().openOutputStream(uriR);
+
+            // 640x480
+            Rect roi = new Rect(220, 140, 100, 100);
+            Mat cropped = new Mat(mCurrentRGBA, roi);
+            List<Mat> bgr = new ArrayList<Mat>(3);
+            Core.split(cropped, bgr);
 
             MatOfByte matOfByte = new MatOfByte();
+//            Imgcodecs.imencode(".jpg", mCurrentGray, matOfByte);
             Imgcodecs.imencode(".jpg", mCurrentGray, matOfByte);
-
             os.write(matOfByte.toArray());
+
+            Imgcodecs.imencode(".jpg", bgr.get(0), matOfByte);
+            osB.write(matOfByte.toArray());
+
+            Imgcodecs.imencode(".jpg", bgr.get(2), matOfByte);
+            osR.write(matOfByte.toArray());
+//            Imgcodecs.imencode(".jpg", cropped, matOfByte);
+
             os.close();
+            osB.close();
+            osR.close();
 
             values.put(MediaStore.Images.Media.IS_PENDING, false);
+
             getContentResolver().update(uri, values, null, null);
+            getContentResolver().update(uriB, values, null, null);
+            getContentResolver().update(uriR, values, null, null);
 
             Log.d(TAG, "Imagem " + fileName + " salva!");
             Toast.makeText(this, fileName + " salva!", Toast.LENGTH_SHORT).show();
