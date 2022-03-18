@@ -156,7 +156,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                             Log.d(TAG, "arquivo existe? " + mVideoFileName + " " + (videoFile.exists() ? "Sim" : "Não"));
                             Log.d(TAG, "pode escrever no arquivo " + mVideoFileName + " " + (videoFile.canWrite() ? "Sim" : "Não"));
 
-                            Size screenSize = new Size(640, 480);
+                            Size screenSize = new Size(mCurrentRGBA.width(), mCurrentRGBA.height());
                             Log.d(TAG, "Video file path: " + videoFile.getAbsolutePath());
 //                            mVideoWriter.open(uri.getPath(), VideoWriter.fourcc('M','J','P','G'), 30, screenSize);
                             mVideoWriter.open(videoFile.getAbsolutePath(), VideoWriter.fourcc('M', 'J', 'P', 'G'), 10, screenSize);
@@ -286,7 +286,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             OutputStream os = getContentResolver().openOutputStream(uri);
             OutputStream osB = getContentResolver().openOutputStream(uriB);
             OutputStream osR = getContentResolver().openOutputStream(uriR);
-
 
             Mat frameToStore = new Mat();
             Imgproc.cvtColor(mCurrentRGBA, frameToStore, Imgproc.COLOR_RGBA2BGR);
