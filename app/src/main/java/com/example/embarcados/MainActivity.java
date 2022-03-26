@@ -6,6 +6,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
+import org.opencv.core.MatOfRect;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Point;
@@ -16,6 +17,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.core.MatOfByte;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.videoio.VideoWriter;
 
 import android.annotation.SuppressLint;
@@ -38,7 +40,9 @@ import android.widget.ImageView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
@@ -51,6 +55,7 @@ import java.util.Locale;
 
 public class MainActivity extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "OCVSample::Activity";
+    private static final Scalar FACE_RECT_COLOR = new Scalar(0, 255, 0, 255);
 
     private CameraBridgeViewBase mOpenCvCameraView;
     private boolean mIsJavaCamera = true;
@@ -63,6 +68,11 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     private ImageView mVideoCameraButton;
     private String mVideoFileName;
     private boolean mIsRecording;
+    private File mCascadeFile;
+    private CascadeClassifier mJavaDetector;
+//    private DetectionBasedTracker  mNativeDetector;
+    private float                  mRelativeFaceSize   = 0.2f;
+    private int                    mAbsoluteFaceSize   = 0;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -70,7 +80,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             switch (status) {
                 case LoaderCallbackInterface.SUCCESS: {
                     Log.i(TAG, "OpenCV loaded successfully");
-                    mOpenCvCameraView.enableView();
 
                     // initialize opencv variables on manager!
                     mCurrentRGBA = new Mat();
@@ -78,6 +87,42 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                     mIsRecording = false;
 //        mRecorder = new MediaRecorder();
                     mVideoWriter = new VideoWriter();
+
+                    // Load native library after(!) OpenCV initialization
+                    System.loadLibrary("detection_based_tracker");
+
+                    try {
+                        // load cascade file from application resources
+                        InputStream is = getResources().openRawResource(R.raw.lbpcascade_frontalface);
+                        File cascadeDir = getDir("cascade", Context.MODE_PRIVATE);
+                        mCascadeFile = new File(cascadeDir, "lbpcascade_frontalface.xml");
+                        FileOutputStream os = new FileOutputStream(mCascadeFile);
+
+                        byte[] buffer = new byte[4096];
+                        int bytesRead;
+                        while ((bytesRead = is.read(buffer)) != -1) {
+                            os.write(buffer, 0, bytesRead);
+                        }
+                        is.close();
+                        os.close();
+
+                        mJavaDetector = new CascadeClassifier(mCascadeFile.getAbsolutePath());
+                        if (mJavaDetector.empty()) {
+                            Log.e(TAG, "Failed to load cascade classifier");
+                            mJavaDetector = null;
+                        } else
+                            Log.i(TAG, "Loaded cascade classifier from " + mCascadeFile.getAbsolutePath());
+
+//                        mNativeDetector = new DetectionBasedTracker(mCascadeFile.getAbsolutePath(), 0);
+
+                        cascadeDir.delete();
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Log.e(TAG, "Failed to load cascade. Exception thrown: " + e);
+                    }
+
+                    mOpenCvCameraView.enableView();
                 }
                 break;
                 default: {
@@ -105,6 +150,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         setContentView(R.layout.activity_main);
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.main_java_surface_view);
+        mOpenCvCameraView.setCameraIndex(1);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
@@ -231,22 +277,51 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         mCurrentRGBA = inputFrame.rgba().clone();
-
-        // Flip 90 degrees anti clockwise
-        Mat mRGBAT = mCurrentRGBA.t();
-        Core.flip(mRGBAT, mRGBAT, 1);
-        Imgproc.resize(mRGBAT, mRGBAT,  mCurrentRGBA.size());
-        mCurrentRGBA = mRGBAT;
-
-        // Draw rectangle on screen
-        int width = mCurrentRGBA.width();
-        int height = mCurrentRGBA.height();
-        Imgproc.rectangle(mCurrentRGBA, new Point( width/2-100, height/2-100),
-                new Point(width/2+100, height/2+100),
-                new Scalar( 255, 0, 0 ), 3);
-
         Imgproc.cvtColor(mCurrentRGBA, mCurrentGray, Imgproc.COLOR_RGBA2GRAY);
 
+//        // Flip 90 degrees anti clockwise
+//        Mat mRGBAT = mCurrentRGBA.t();
+//        Core.flip(mRGBAT, mRGBAT, 1);
+//        Imgproc.resize(mRGBAT, mRGBAT,  mCurrentRGBA.size());
+//        mCurrentRGBA = mRGBAT;
+
+//        // Draw rectangle on screen
+//        int w = mCurrentRGBA.width();
+//        int h = mCurrentRGBA.height();
+//        Imgproc.rectangle(mCurrentRGBA, new Point( w/2-100, h/2-100),
+//                new Point(w/2+100, h/2+100),
+//                new Scalar( 255, 0, 0 ), 3);
+
+        // Face detection
+        if (mAbsoluteFaceSize == 0) {
+            int height = mCurrentGray.rows();
+            if (Math.round(height * mRelativeFaceSize) > 0) {
+                mAbsoluteFaceSize = Math.round(height * mRelativeFaceSize);
+            }
+//            mNativeDetector.setMinFaceSize(mAbsoluteFaceSize);
+        }
+
+        MatOfRect faces = new MatOfRect();
+
+//        if (mDetectorType == JAVA_DETECTOR) {
+            if (mJavaDetector != null)
+                mJavaDetector.detectMultiScale(mCurrentGray, faces, 1.1, 2, 2, // TODO: objdetect.CV_HAAR_SCALE_IMAGE
+                        new Size(mAbsoluteFaceSize, mAbsoluteFaceSize), new Size());
+//        }
+//        else if (mDetectorType == NATIVE_DETECTOR) {
+//            if (mNativeDetector != null)
+//                mNativeDetector.detect(mGray, faces);
+//        }
+//        else {
+//            Log.e(TAG, "Detection method is not selected!");
+//        }
+
+        Rect[] facesArray = faces.toArray();
+        for (int i = 0; i < facesArray.length; i++)
+            Imgproc.rectangle(mCurrentRGBA, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
+
+
+        // Store frames
         if (mIsRecording) {
             saveVideoFrame();
         }
