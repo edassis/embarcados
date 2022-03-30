@@ -254,8 +254,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         Rect[] facesArray = faces.toArray();
         for (int i = 0; i < facesArray.length; i++) {
-            double[] roi_tl = {facesArray[i].tl().x + 100, facesArray[i].tl().y + 100};
-            double[] roi_br = {facesArray[i].br().x - 100, facesArray[i].br().y - 100};
+            Point center = new Point(new double[]{facesArray[i].x + facesArray[i].width/2.0,
+                    facesArray[i].y + facesArray[i].height/2.0});
+            double[] roi_tl = {center.x - 100, center.y - 100};
+            double[] roi_br = {center.x + 100, center.y + 100};
 
             if(i == 0) {      // First iteration determines ROI to save
                 mROIRect = new Rect(new Point(roi_tl), new Point(roi_br));
@@ -286,6 +288,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 //        super.onTouchEvent(event);
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             savePicture();
+            _saveROI();
         }
         return true;
     }
