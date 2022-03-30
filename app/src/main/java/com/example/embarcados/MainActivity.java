@@ -44,10 +44,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -56,6 +54,7 @@ import java.util.Locale;
 public class MainActivity extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "OCVSample::Activity";
     private static final Scalar FACE_RECT_COLOR = new Scalar(0, 255, 0, 255);
+    private static final Scalar ROI_RECT_COLOR = new Scalar(0, 0, 255, 255);
 
     private CameraBridgeViewBase mOpenCvCameraView;
     private boolean mIsJavaCamera = true;
@@ -70,9 +69,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     private boolean mIsRecording;
     private File mCascadeFile;
     private CascadeClassifier mJavaDetector;
-//    private DetectionBasedTracker  mNativeDetector;
     private float                  mRelativeFaceSize   = 0.2f;
     private int                    mAbsoluteFaceSize   = 0;
+    private Rect mROIRect;
+    private ArrayList<Mat> mROIFrameBuffer;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -87,6 +87,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                     mIsRecording = false;
 //        mRecorder = new MediaRecorder();
                     mVideoWriter = new VideoWriter();
+                    mROIRect = new Rect();
+                    mROIFrameBuffer = new ArrayList<Mat>();
 
                     // Load native library after(!) OpenCV initialization
                     System.loadLibrary("detection_based_tracker");
@@ -112,8 +114,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                             mJavaDetector = null;
                         } else
                             Log.i(TAG, "Loaded cascade classifier from " + mCascadeFile.getAbsolutePath());
-
-//                        mNativeDetector = new DetectionBasedTracker(mCascadeFile.getAbsolutePath(), 0);
 
                         cascadeDir.delete();
 
@@ -150,7 +150,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         setContentView(R.layout.activity_main);
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.main_java_surface_view);
-        mOpenCvCameraView.setCameraIndex(1);
+        mOpenCvCameraView.setCameraIndex(1);        // Frontal camera
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
@@ -166,70 +166,15 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
                 if (motionEvent.getAction() == MotionEvent.ACTION_DOWN) {
-                    Context context = getApplicationContext();
                     mIsRecording = !mIsRecording;
-                    File videoFile;
 
                     if (mIsRecording) {
                         if (!mVideoWriter.isOpened()) {
-                            SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault());
-                            String curDateTime = sdf.format(new Date());
-
-                            mVideoFileName = "SampleVideo_" + curDateTime + ".avi";
-
-//                            ContentValues values = new ContentValues();
-//                            values.put(MediaStore.Video.Media.MIME_TYPE, "video/avi");
-//                            values.put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000);
-//                            values.put(MediaStore.Video.Media.DATE_TAKEN, System.currentTimeMillis());
-//                            values.put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/" + "opencv");
-//                            values.put(MediaStore.Video.Media.IS_PENDING, true);
-//
-//                            Uri uri = getContentResolver().insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
-//                            File path = getExternalFilesDir(null);
-                            File path = Environment.getExternalStoragePublicDirectory(
-                                    Environment.DIRECTORY_PICTURES);
-                            videoFile = new File(path, mVideoFileName);
-                            if(!videoFile.exists()) {
-                                try {
-                                    videoFile.createNewFile();
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-                            }
-//                            File file = new File(uri);
-//                            File opencvDir = commonDocumentDirPath("opencv");
-//                            File file = new File(opencvDir, "fileName");
-                            Log.d(TAG, "arquivo existe? " + mVideoFileName + " " + (videoFile.exists() ? "Sim" : "Não"));
-                            Log.d(TAG, "pode escrever no arquivo " + mVideoFileName + " " + (videoFile.canWrite() ? "Sim" : "Não"));
-
-                            Size screenSize = new Size(mCurrentRGBA.width(), mCurrentRGBA.height());
-                            Log.d(TAG, "Video file path: " + videoFile.getAbsolutePath());
-//                            mVideoWriter.open(uri.getPath(), VideoWriter.fourcc('M','J','P','G'), 30, screenSize);
-                            mVideoWriter.open(videoFile.getAbsolutePath(), VideoWriter.fourcc('M', 'J', 'P', 'G'), 10, screenSize);
-                            if (mVideoWriter.isOpened()) {
-                                Log.d(TAG, "Sucesso ao abrir arquivo de video para escrita.");
-                                Toast.makeText(context, mVideoFileName + " aberto!", Toast.LENGTH_SHORT).show();
-                            } else {
-                                Log.d(TAG, "Erro ao abrir arquivo de video para escrita.");
-                            }
+                            _openVideoFile();
                         }
-                        mVideoCameraButton.setColorFilter(Color.RED);
                     } else { // Not recording (disable recording)
                         if(mVideoWriter.isOpened()) {
-                            Toast.makeText(context, mVideoFileName + " salvo!", Toast.LENGTH_SHORT).show();
-                            mVideoWriter.release();
-
-                            // Tell the media scanner about the new file so that it is
-                            // immediately available to the user.
-                            MediaScannerConnection.scanFile(getApplicationContext(),
-                                    new String[] { mVideoWriter.toString() }, null,
-                                    new MediaScannerConnection.OnScanCompletedListener() {
-                                        public void onScanCompleted(String path, Uri uri) {
-                                            Log.i("ExternalStorage", "Scanned " + path + ":");
-                                            Log.i("ExternalStorage", "-> uri=" + uri);
-                                        }
-                                    }
-                            );    mVideoCameraButton.setColorFilter(Color.WHITE);
+                            _closeVideoFile();
                         }
                     }
                     return true;
@@ -298,28 +243,35 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             if (Math.round(height * mRelativeFaceSize) > 0) {
                 mAbsoluteFaceSize = Math.round(height * mRelativeFaceSize);
             }
-//            mNativeDetector.setMinFaceSize(mAbsoluteFaceSize);
         }
 
         MatOfRect faces = new MatOfRect();
 
-//        if (mDetectorType == JAVA_DETECTOR) {
-            if (mJavaDetector != null)
+        if (mJavaDetector != null)
                 mJavaDetector.detectMultiScale(mCurrentGray, faces, 1.1, 2, 2, // TODO: objdetect.CV_HAAR_SCALE_IMAGE
                         new Size(mAbsoluteFaceSize, mAbsoluteFaceSize), new Size());
-//        }
-//        else if (mDetectorType == NATIVE_DETECTOR) {
-//            if (mNativeDetector != null)
-//                mNativeDetector.detect(mGray, faces);
-//        }
-//        else {
-//            Log.e(TAG, "Detection method is not selected!");
-//        }
+
 
         Rect[] facesArray = faces.toArray();
-        for (int i = 0; i < facesArray.length; i++)
-            Imgproc.rectangle(mCurrentRGBA, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
+        for (int i = 0; i < facesArray.length; i++) {
+            double[] roi_tl = {facesArray[i].tl().x + 100, facesArray[i].tl().y + 100};
+            double[] roi_br = {facesArray[i].br().x - 100, facesArray[i].br().y - 100};
 
+            if(i == 0) {      // First iteration determines ROI to save
+                mROIRect = new Rect(new Point(roi_tl), new Point(roi_br));
+
+                if(mROIFrameBuffer.size() >= 2) {
+                    Mat aux = _getROIFrame(mCurrentRGBA);
+                    mROIFrameBuffer.set(0, mROIFrameBuffer.get(1));
+                    mROIFrameBuffer.set(1, aux);
+                } else {
+                    mROIFrameBuffer.add(_getROIFrame(mCurrentRGBA));
+                }
+            }
+
+            Imgproc.rectangle(mCurrentRGBA, new Point(roi_tl), new Point(roi_br), ROI_RECT_COLOR, 2);
+            Imgproc.rectangle(mCurrentRGBA, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
+        }
 
         // Store frames
         if (mIsRecording) {
@@ -359,40 +311,28 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         try {
             OutputStream os = getContentResolver().openOutputStream(uri);
-            OutputStream osB = getContentResolver().openOutputStream(uriB);
-            OutputStream osR = getContentResolver().openOutputStream(uriR);
 
             Mat frameToStore = new Mat();
             Imgproc.cvtColor(mCurrentRGBA, frameToStore, Imgproc.COLOR_RGBA2BGR);
+//
+//            int width = frameToStore.width();
+//            int height = frameToStore.height();
 
-            int width = frameToStore.width();
-            int height = frameToStore.height();
+//            Rect roi = new Rect(width/2-100, height/2-100, 200, 200);
+//            Mat cropped = _getROIFrame(frameToStore);
 
-            Rect roi = new Rect(width/2-100, height/2-100, 200, 200);
-            Mat cropped = new Mat(frameToStore, roi);
-            List<Mat> bgr = new ArrayList<Mat>(3);
-            Core.split(cropped, bgr);
+//            List<Mat> bgr = new ArrayList<Mat>(3);
+//            Core.split(cropped, bgr);
 
             MatOfByte matOfByte = new MatOfByte();
-//            Imgcodecs.imencode(".jpg", mCurrentGray, matOfByte);
             Imgcodecs.imencode(".jpg", frameToStore, matOfByte);
             os.write(matOfByte.toArray());
 
-            Imgcodecs.imencode(".jpg", bgr.get(0), matOfByte);
-            osB.write(matOfByte.toArray());
-
-            Imgcodecs.imencode(".jpg", bgr.get(2), matOfByte);
-            osR.write(matOfByte.toArray());
-
             os.close();
-            osB.close();
-            osR.close();
 
             values.put(MediaStore.Images.Media.IS_PENDING, false);
 
             getContentResolver().update(uri, values, null, null);
-            getContentResolver().update(uriB, values, null, null);
-            getContentResolver().update(uriR, values, null, null);
 
             Log.d(TAG, "Imagem " + fileName + " salva!");
             Toast.makeText(this, fileName + " salva!", Toast.LENGTH_SHORT).show();
@@ -406,6 +346,121 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
     public void saveVideoFrame() {
         mVideoWriter.write(mCurrentRGBA);
+    }
+
+    public void _saveROI() {
+        // Ensures at least 2 frames in buffer
+        if(mROIFrameBuffer.size() < 2) return;
+
+        SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault());
+        String curDateTime = sdf.format(new Date());
+        String ROIFileName = "ROI_" + curDateTime + ".jpg";
+//        File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        values.put(MediaStore.Images.Media.DATE_ADDED, System.currentTimeMillis() / 1000);
+        values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+        values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/" + "opencv");
+        values.put(MediaStore.Images.Media.IS_PENDING, true);
+
+        Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+
+        // Get frame
+        Mat ROIFrame1 = mROIFrameBuffer.get(0);
+        Mat ROIFrame2 = mROIFrameBuffer.get(1);
+        Mat ROIResult = new Mat();
+
+        // Get frames' difference
+        Core.subtract(ROIFrame2, ROIFrame1, ROIResult);
+
+        List<Mat> bgr = new ArrayList<Mat>(3);
+        Core.split(ROIResult, bgr);
+
+        // Store into file
+        try {
+            OutputStream os = getContentResolver().openOutputStream(uri);
+
+            MatOfByte matOfByte = new MatOfByte();
+
+            Imgproc.cvtColor(ROIResult, ROIResult, Imgproc.COLOR_RGBA2BGR);
+
+            Imgcodecs.imencode(".jpg", ROIResult, matOfByte);
+            os.write(matOfByte.toArray());
+
+            os.close();
+
+            values.put(MediaStore.Images.Media.IS_PENDING, false);
+            getContentResolver().update(uri, values, null, null);
+
+            Log.d(TAG, "Imagem " + ROIFileName + " salva!");
+            Toast.makeText(this, ROIFileName + " salva!", Toast.LENGTH_SHORT).show();
+        } catch(Exception e) {
+            Log.d(TAG, "Falha ao salvar ROI.");
+            e.printStackTrace();
+            finish();
+            System.exit(0);
+        }
+
+        mROIFrameBuffer.clear();
+    }
+
+    public void _openVideoFile() {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault());
+        String curDateTime = sdf.format(new Date());
+
+        mVideoFileName = "SampleVideo_" + curDateTime + ".avi";
+
+        File path = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES);
+        File videoFile = new File(path, mVideoFileName);
+        if(!videoFile.exists()) {
+            try {
+                videoFile.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        Log.d(TAG, "arquivo existe " + mVideoFileName + ": " + (videoFile.exists() ? "Sim" : "Não"));
+        Log.d(TAG, "pode escrever no arquivo " + mVideoFileName + ": " + (videoFile.canWrite() ? "Sim" : "Não"));
+
+        Size screenSize = new Size(mCurrentRGBA.width(), mCurrentRGBA.height());
+        Log.d(TAG, "Video file path: " + videoFile.getAbsolutePath());
+
+        mVideoWriter.open(videoFile.getAbsolutePath(), VideoWriter.fourcc('M', 'J', 'P', 'G'), 10, screenSize);
+
+        if (mVideoWriter.isOpened()) {
+            Log.d(TAG, "Sucesso ao abrir arquivo de video para escrita.");
+            Toast.makeText(getApplicationContext(), mVideoFileName + " aberto!", Toast.LENGTH_SHORT).show();
+        } else {
+            Log.d(TAG, "Erro ao abrir arquivo de video para escrita.");
+        }
+
+        mVideoCameraButton.setColorFilter(Color.RED);
+    }
+
+    public void _closeVideoFile() {
+        Toast.makeText(getApplicationContext(), mVideoFileName + " salvo!", Toast.LENGTH_SHORT).show();
+        mVideoWriter.release();
+
+        // Tell the media scanner about the new file so that it is
+        // immediately available to the user.
+        MediaScannerConnection.scanFile(getApplicationContext(),
+                new String[]{mVideoWriter.toString()}, null,
+                new MediaScannerConnection.OnScanCompletedListener() {
+                    public void onScanCompleted(String path, Uri uri) {
+                        Log.i("ExternalStorage", "Scanned " + path + ":");
+                        Log.i("ExternalStorage", "-> uri=" + uri);
+                    }
+                }
+        );
+        mVideoCameraButton.setColorFilter(Color.WHITE);
+    }
+
+
+    public Mat _getROIFrame(Mat fullFrame) {
+        return new Mat(fullFrame, mROIRect);
     }
 
     public static File commonDocumentDirPath(String FolderName) {
