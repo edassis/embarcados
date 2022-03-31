@@ -317,7 +317,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
             Mat frameToStore = new Mat();
             Imgproc.cvtColor(mCurrentRGBA, frameToStore, Imgproc.COLOR_RGBA2BGR);
-//
+
+            // NAO DELETA ESSA PARTE!!!
 //            int width = frameToStore.width();
 //            int height = frameToStore.height();
 
