@@ -6,6 +6,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
@@ -48,8 +49,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Queue;
 
 public class MainActivity extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "OCVSample::Activity";
@@ -72,7 +75,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     private float                  mRelativeFaceSize   = 0.2f;
     private int                    mAbsoluteFaceSize   = 0;
     private Rect mROIRect;
-    private ArrayList<Mat> mROIFrameBuffer;
+    private Queue<Mat> mROIFrameBuffer;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -88,7 +91,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 //        mRecorder = new MediaRecorder();
                     mVideoWriter = new VideoWriter();
                     mROIRect = new Rect();
-                    mROIFrameBuffer = new ArrayList<Mat>();
+                    mROIFrameBuffer = new LinkedList<Mat>();
 
                     // Load native library after(!) OpenCV initialization
                     System.loadLibrary("detection_based_tracker");
@@ -150,7 +153,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         setContentView(R.layout.activity_main);
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.main_java_surface_view);
-        mOpenCvCameraView.setCameraIndex(1);        // Frontal camera
+//        mOpenCvCameraView.setCameraIndex(1);        // Frontal camera
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
@@ -254,26 +257,24 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         Rect[] facesArray = faces.toArray();
         for (int i = 0; i < facesArray.length; i++) {
-            Point center = new Point(new double[]{facesArray[i].x + facesArray[i].width/2.0,
-                    facesArray[i].y + facesArray[i].height/2.0});
+            Imgproc.rectangle(mCurrentRGBA, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
+        }
+
+        if(facesArray.length > 0 && facesArray[0].width > 200  && facesArray[0].height > 200) {      // First iteration determines ROI to save
+            Point center = new Point(new double[]{facesArray[0].x + facesArray[0].width/2.0,
+                    facesArray[0].y + facesArray[0].height/2.0});
             double[] roi_tl = {center.x - 100, center.y - 100};
             double[] roi_br = {center.x + 100, center.y + 100};
+            mROIRect = new Rect(new Point(roi_tl), new Point(roi_br));
 
-            if(i == 0) {      // First iteration determines ROI to save
-                mROIRect = new Rect(new Point(roi_tl), new Point(roi_br));
-
-                if(mROIFrameBuffer.size() >= 2) {
-                    Mat aux = _getROIFrame(mCurrentRGBA);
-                    mROIFrameBuffer.set(0, mROIFrameBuffer.get(1));
-                    mROIFrameBuffer.set(1, aux);
-                } else {
-                    mROIFrameBuffer.add(_getROIFrame(mCurrentRGBA));
-                }
+            mROIFrameBuffer.add(new Mat(mCurrentRGBA, mROIRect));
+            if(mROIFrameBuffer.size() > 2) {
+                mROIFrameBuffer.remove();
             }
 
             Imgproc.rectangle(mCurrentRGBA, new Point(roi_tl), new Point(roi_br), ROI_RECT_COLOR, 2);
-            Imgproc.rectangle(mCurrentRGBA, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
         }
+
 
         // Store frames
         if (mIsRecording) {
@@ -371,22 +372,37 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
 
         // Get frame
-        Mat ROIFrame1 = mROIFrameBuffer.get(0);
-        Mat ROIFrame2 = mROIFrameBuffer.get(1);
+        Mat ROIFrame1 = mROIFrameBuffer.remove();
+        Mat ROIFrame2 = mROIFrameBuffer.remove();
         Mat ROIResult = new Mat();
 
         // Get frames' difference
         Core.subtract(ROIFrame2, ROIFrame1, ROIResult);
 
-        List<Mat> bgr = new ArrayList<Mat>(3);
-        Core.split(ROIResult, bgr);
-
+//        List<Mat> bgr = new ArrayList<Mat>(3);
+//        Core.split(ROIResult, bgr);
         // DCT
+        Mat ROIGray = new Mat();
+        Imgproc.cvtColor(ROIResult, ROIGray, Imgproc.COLOR_RGBA2GRAY);
+
+        int m = Core.getOptimalDFTSize(ROIGray.rows());
+        int n = Core.getOptimalDFTSize(ROIGray.cols());
+
+        Mat padded = new Mat();
+        Core.copyMakeBorder(ROIGray, padded, 0, m - ROIGray.rows(), 0, n - ROIGray.cols(), Core.BORDER_CONSTANT, Scalar.all(0));
+        padded.convertTo(padded, CvType.CV_32F, 1./255, 0);
+
         Mat ROIDCT = new Mat();
-        Core.dct(ROIResult, ROIDCT);
+        Core.dct(padded, ROIDCT);
 
         // Diagonal traverse
-
+        double[] diagTraverse = _ZigZag(ROIDCT);
+        // put 0 in the last 20% values
+        for (int i = (int)(0.8*diagTraverse.length+1); i < diagTraverse.length; i++) {
+            Log.d(TAG, "Before: "+diagTraverse[i]);
+            diagTraverse[i] = 0;
+            Log.d(TAG, "After: "+diagTraverse[i]);
+        }
 
         // Store into file
         try {
@@ -470,86 +486,75 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     }
 
 
-    public Mat _getROIFrame(Mat fullFrame) {
-        return new Mat(fullFrame, mROIRect);
-    }
 
-    public int[] _ZigZag(Mat matrix) {
-        // Use matrix.diag(), upper direction, bottom direction, concatenate
-
-
+    public double[] _ZigZag(Mat matrix) {
 //        // Check for empty matrices
 //        if (matrix == null || matrix.length == 0) {
 //            return new int[0];
 //        }
-//
-//        // Variables to track the size of the matrix
-//        int N = matrix.length;
-//        int M = matrix[0].length;
-//
-//        // Incides that will help us progress through
-//        // the matrix, one element at a time.
-//        int row = 0, column = 0;
-//
-//        // As explained in the article, this is the variable
-//        // that helps us keep track of what direction we are
-//        // processing the current diaonal
-//        int direction = 1;
-//
-//        // The final result array
-//        int[] result = new int[N*M];
-//        int r = 0;
-//
-//        // The uber while loop which will help us iterate over all
-//        // the elements in the array.
-//        while (row < N && column < M) {
-//
-//            // First and foremost, add the current element to
-//            // the result matrix.
-//            result[r++] = matrix[row][column];
-//
-//            // Move along in the current diagonal depending upon
-//            // the current direction.[i, j] -> [i - 1, j + 1] if
-//            // going up and [i, j] -> [i + 1][j - 1] if going down.
-//            int new_row = row + (direction == 1 ? -1 : 1);
-//            int new_column = column + (direction == 1 ? 1 : -1);
-//
-//            // Checking if the next element in the diagonal is within the
-//            // bounds of the matrix or not. If it's not within the bounds,
-//            // we have to find the next head.
-//            if (new_row < 0 || new_row == N || new_column < 0 || new_column == M) {
-//
-//                // If the current diagonal was going in the upwards
-//                // direction.
-//                if (direction == 1) {
-//
-//                    // For an upwards going diagonal having [i, j] as its tail
-//                    // If [i, j + 1] is within bounds, then it becomes
-//                    // the next head. Otherwise, the element directly below
-//                    // i.e. the element [i + 1, j] becomes the next head
-//                    row += (column == M - 1 ? 1 : 0) ;
-//                    column += (column < M - 1 ? 1 : 0);
-//
-//                } else {
-//
-//                    // For a downwards going diagonal having [i, j] as its tail
-//                    // if [i + 1, j] is within bounds, then it becomes
-//                    // the next head. Otherwise, the element directly below
-//                    // i.e. the element [i, j + 1] becomes the next head
-//                    column += (row == N - 1 ? 1 : 0);
-//                    row += (row < N - 1 ? 1 : 0);
-//                }
-//
-//                // Flip the direction
-//                direction = 1 - direction;
-//
-//            } else {
-//
-//                row = new_row;
-//                column = new_column;
-//            }
-//        }
-//        return result;
+        // Variables to track the size of the matrix
+        int N = matrix.rows();
+        int M = matrix.cols();
+
+        // Indices that will help us progress through
+        // the matrix, one element at a time.
+        int row = 0, column = 0;
+
+        // As explained in the article, this is the variable
+        // that helps us keep track of what direction we are
+        // processing the current diagonal
+        int direction = 1;
+
+        // The final result array
+        double[] result = new double[N*M];
+        int r = 0;
+
+        // The uber while loop which will help us iterate over all
+        // the elements in the array.
+        while (row < N && column < M) {
+            // First and foremost, add the current element to
+            // the result matrix.
+            double[] pixel = matrix.get(row, column);
+            result[r++] = pixel[0]; // GreyScale so value in first channel.
+
+            // Move along in the current diagonal depending upon
+            // the current direction.[i, j] -> [i - 1, j + 1] if
+            // going up and [i, j] -> [i + 1][j - 1] if going down.
+            int new_row = row + (direction == 1 ? -1 : 1);
+            int new_column = column + (direction == 1 ? 1 : -1);
+
+            // Checking if the next element in the diagonal is within the
+            // bounds of the matrix or not. If it's not within the bounds,
+            // we have to find the next head.
+            if (new_row < 0 || new_row == N || new_column < 0 || new_column == M) {
+
+                // If the current diagonal was going in the upwards
+                // direction.
+                if (direction == 1) {
+
+                    // For an upwards going diagonal having [i, j] as its tail
+                    // If [i, j + 1] is within bounds, then it becomes
+                    // the next head. Otherwise, the element directly below
+                    // i.e. the element [i + 1, j] becomes the next head
+                    row += (column == M - 1 ? 1 : 0) ;
+                    column += (column < M - 1 ? 1 : 0);
+                } else {
+                    // For a downwards going diagonal having [i, j] as its tail
+                    // if [i + 1, j] is within bounds, then it becomes
+                    // the next head. Otherwise, the element directly below
+                    // i.e. the element [i, j + 1] becomes the next head
+                    column += (row == N - 1 ? 1 : 0);
+                    row += (row < N - 1 ? 1 : 0);
+                }
+                // Flip the direction
+                direction = 1 - direction;
+
+            } else {
+                row = new_row;
+                column = new_column;
+            }
+        }
+        return result;
     }
 
     public static File commonDocumentDirPath(String FolderName) {
