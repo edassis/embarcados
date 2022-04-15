@@ -42,6 +42,7 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -399,10 +400,17 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         double[] diagTraverse = _ZigZag(ROIDCT);
         // put 0 in the last 20% values
         for (int i = (int)(0.8*diagTraverse.length+1); i < diagTraverse.length; i++) {
-            Log.d(TAG, "Before: "+diagTraverse[i]);
+//            Log.d(TAG, "Before: "+diagTraverse[i]);
             diagTraverse[i] = 0;
-            Log.d(TAG, "After: "+diagTraverse[i]);
+//            Log.d(TAG, "After: "+diagTraverse[i]);
         }
+
+        // save array into file
+        StringBuilder log = new StringBuilder();
+        for (double v : diagTraverse) {
+            log.append(String.format("%.4f ", v));
+        }
+        saveToText(log.toString());
 
         // Store into file
         try {
@@ -574,5 +582,40 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             }
         }
         return dir;
+    }
+
+    public void saveToText(String content) {
+        File videoFile = openFile("Log");
+
+        try {
+            FileWriter writer = new FileWriter(videoFile);
+            writer.append(content);
+            writer.flush();
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        Toast.makeText(this, "Data has been written to Report File", Toast.LENGTH_SHORT).show();
+    }
+
+    public static File openFile(String fileName) {
+        SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault());
+        String curDateTime = sdf.format(new Date());
+
+        fileName = fileName + "_" + curDateTime + ".txt";
+
+        File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+        File videoFile = new File(path, fileName);
+
+        if(!videoFile.exists()) {
+            try {
+                videoFile.createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return videoFile;
     }
 }
