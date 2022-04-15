@@ -406,11 +406,11 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         }
 
         // save array into file
-        StringBuilder log = new StringBuilder();
-        for (double v : diagTraverse) {
-            log.append(String.format("%.4f ", v));
-        }
-        saveToText(log.toString());
+//        StringBuilder log = new StringBuilder();
+//        for (double v : diagTraverse) {
+//            log.append(String.format("%.4f ", v));
+//        }
+//        saveToText(log.toString());
 
         // Store into file
         try {
