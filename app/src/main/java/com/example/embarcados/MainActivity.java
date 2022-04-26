@@ -48,12 +48,15 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Queue;
+import java.util.Set;
 
 public class MainActivity extends CameraActivity implements CvCameraViewListener2 {
     private static final String TAG = "OCVSample::Activity";
@@ -264,8 +267,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         if(facesArray.length > 0 && facesArray[0].width > 200  && facesArray[0].height > 200) {      // First iteration determines ROI to save
             Point center = new Point(new double[]{facesArray[0].x + facesArray[0].width/2.0,
                     facesArray[0].y + facesArray[0].height/2.0});
-            double[] roi_tl = {center.x - 100, center.y - 100};
-            double[] roi_br = {center.x + 100, center.y + 100};
+//            double[] roi_tl = {center.x - 100, center.y - 100};
+//            double[] roi_br = {center.x + 100, center.y + 100};
+            double[] roi_tl = {center.x - 80, center.y - facesArray[0].height/2.0};
+            double[] roi_br = {center.x + 80, center.y - 60};
             mROIRect = new Rect(new Point(roi_tl), new Point(roi_br));
 
             mROIFrameBuffer.add(new Mat(mCurrentRGBA, mROIRect));
@@ -395,6 +400,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         Mat ROIDCT = new Mat();
         Core.dct(padded, ROIDCT);
+        // Should we process B and R separated?
+        // Use forehead as ROI
 
         // Diagonal traverse
         double[] diagTraverse = _ZigZag(ROIDCT);
@@ -403,6 +410,35 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 //            Log.d(TAG, "Before: "+diagTraverse[i]);
             diagTraverse[i] = 0;
 //            Log.d(TAG, "After: "+diagTraverse[i]);
+        }
+
+        // Get 5 greater peaks
+        Set<Integer> peaks = new HashSet<Integer>();
+        for (int k = 0; k < 5; k++) {   // 5 passes
+            int max_idx = k;    // Guarantee an valid max
+            double max = diagTraverse[max_idx];
+
+            for (int i = 0; i < diagTraverse.length; i++) { // Traverse vector
+                if (diagTraverse[i] > max) { // New peak candidate
+                    boolean isPeak = true;
+                    for (int j = 1; j <= 7; j++) { // Check neighbours to guarantee 7px dist
+                        if (peaks.contains(i-j) || peaks.contains(i) || peaks.contains(i+j)) {
+                            isPeak = false;
+                            break;
+                        }
+                    }
+
+                    if(isPeak) {
+                        max_idx = i;
+                        max = diagTraverse[max_idx];
+                    }
+                }
+            }
+            peaks.add(max_idx);
+        }
+
+        for(int idx : peaks) {
+            Log.d(TAG, "Peaks: "+diagTraverse[idx]);
         }
 
         // save array into file
@@ -492,8 +528,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         );
         mVideoCameraButton.setColorFilter(Color.WHITE);
     }
-
-
 
     public double[] _ZigZag(Mat matrix) {
 //        // Check for empty matrices
