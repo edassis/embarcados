@@ -410,34 +410,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 //            Log.d(TAG, "After: "+diagTraverse[i]);
         }
 
-        // Get 5 greater peaks
-        Set<Integer> peaks = new HashSet<Integer>();
-        for (int k = 0; k < 5; k++) {   // 5 passes
-            int max_idx = -1;    // Guarantee an valid max
-            double max = -1;
-
-            for (int i = 0; i < diagTraverse.length; i++) { // Traverse vector
-                if (max_idx == -1 || diagTraverse[i] > max) { // New peak candidate
-                    boolean isPeak = true;
-                    for (int j = 1; j <= 7; j++) { // Check neighbours to guarantee 7px dist
-                        if (peaks.contains(i-j) || peaks.contains(i) || peaks.contains(i+j)) {
-                            isPeak = false;
-                            break;
-                        }
-                    }
-
-                    if(isPeak) {
-                        max_idx = i;
-                        max = diagTraverse[max_idx];
-                    }
-                }
-            }
-            peaks.add(max_idx);
-        }
-
-        for(int idx : peaks) {
-            Log.d(TAG, "Peaks: "+diagTraverse[idx]);
-        }
+        ArrayList<Double> peaks = _getPeaks(diagTraverse);
+        double stO2 = _getSaturation(peaks);
 
         // save array into file
 //        StringBuilder log = new StringBuilder();
@@ -595,6 +569,64 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             }
         }
         return result;
+    }
+
+    public ArrayList<Double> _getPeaks(double[] diagTraverse) {
+        // Get 5 greater peaks
+        Set<Integer> peaks_idx = new HashSet<Integer>();
+        for (int k = 0; k < 5; k++) {   // 5 passes
+            int max_idx = -1;    // Guarantee an valid max
+            double max = -1;
+
+            for (int i = 0; i < diagTraverse.length; i++) { // Traverse vector
+                if (max_idx == -1 || diagTraverse[i] > max) { // New peak candidate
+                    boolean isPeak = true;
+                    for (int j = 1; j <= 7; j++) { // Check neighbours to guarantee 7px dist
+                        if (peaks_idx.contains(i-j) || peaks_idx.contains(i) || peaks_idx.contains(i+j)) {
+                            isPeak = false;
+                            break;
+                        }
+                    }
+
+                    if(isPeak) {
+                        max_idx = i;
+                        max = diagTraverse[max_idx];
+                    }
+                }
+            }
+            peaks_idx.add(max_idx);
+        }
+
+        ArrayList<Double> peaks = new ArrayList<Double>();
+        for(int idx : peaks_idx) {
+            Log.d(TAG, "Peaks: "+diagTraverse[idx]);
+            peaks.add(diagTraverse[idx]);
+        }
+        // peaks on descending order
+        Collections.sort(peaks, Collections.reverseOrder());
+
+        return peaks;
+    }
+
+    public double _getSaturation(ArrayList<Double> peaks) {
+        // DC
+        double dc = peaks.get(0);
+//        Log.d(TAG, "DC " + dc);
+        // AC
+        double ac = 0;
+        for(int i = 1; i < peaks.size(); i++) {
+//            Log.d(TAG, "Peak "+i+": "+peaks.get(i));
+            ac += peaks.get(i);
+        }
+        ac /= peaks.size();
+//        Log.d(TAG, "AC " + ac);
+        // R
+        double R = dc/ac;
+        // StO2
+        double stO2 = 100 - R * 0.015;
+        Log.d(TAG, "SatO2 " + stO2);
+
+        return stO2;
     }
 
     public static File commonDocumentDirPath(String FolderName) {
