@@ -267,10 +267,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         if(facesArray.length > 0 && facesArray[0].width > 200  && facesArray[0].height > 200) {      // First iteration determines ROI to save
             Point center = new Point(new double[]{facesArray[0].x + facesArray[0].width/2.0,
                     facesArray[0].y + facesArray[0].height/2.0});
-//            double[] roi_tl = {center.x - 100, center.y - 100};
-//            double[] roi_br = {center.x + 100, center.y + 100};
-            double[] roi_tl = {center.x - 80, center.y - facesArray[0].height/2.0};
-            double[] roi_br = {center.x + 80, center.y - 60};
+            double[] roi_tl = {center.x - 80, facesArray[0].tl().y};
+            double[] roi_br = {center.x + 80, facesArray[0].tl().y + 70};
             mROIRect = new Rect(new Point(roi_tl), new Point(roi_br));
 
             mROIFrameBuffer.add(new Mat(mCurrentRGBA, mROIRect));
@@ -415,11 +413,11 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         // Get 5 greater peaks
         Set<Integer> peaks = new HashSet<Integer>();
         for (int k = 0; k < 5; k++) {   // 5 passes
-            int max_idx = k;    // Guarantee an valid max
-            double max = diagTraverse[max_idx];
+            int max_idx = -1;    // Guarantee an valid max
+            double max = -1;
 
             for (int i = 0; i < diagTraverse.length; i++) { // Traverse vector
-                if (diagTraverse[i] > max) { // New peak candidate
+                if (max_idx == -1 || diagTraverse[i] > max) { // New peak candidate
                     boolean isPeak = true;
                     for (int j = 1; j <= 7; j++) { // Check neighbours to guarantee 7px dist
                         if (peaks.contains(i-j) || peaks.contains(i) || peaks.contains(i+j)) {
