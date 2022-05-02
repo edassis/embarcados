@@ -46,9 +46,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -282,7 +282,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         // Store frames
         if (mIsRecording) {
-            saveVideoFrame();
+            _saveVideoFrame();
         }
 
         return mCurrentRGBA;
@@ -293,7 +293,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 //        super.onTouchEvent(event);
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             savePicture();
-            _saveROI();
+            saveROI();
         }
         return true;
     }
@@ -323,16 +323,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             Mat frameToStore = new Mat();
             Imgproc.cvtColor(mCurrentRGBA, frameToStore, Imgproc.COLOR_RGBA2BGR);
 
-            // NAO DELETA ESSA PARTE!!!
-//            int width = frameToStore.width();
-//            int height = frameToStore.height();
-
-//            Rect roi = new Rect(width/2-100, height/2-100, 200, 200);
-//            Mat cropped = _getROIFrame(frameToStore);
-
-//            List<Mat> bgr = new ArrayList<Mat>(3);
-//            Core.split(cropped, bgr);
-
             MatOfByte matOfByte = new MatOfByte();
             Imgcodecs.imencode(".jpg", frameToStore, matOfByte);
             os.write(matOfByte.toArray());
@@ -353,11 +343,11 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         }
     }
 
-    public void saveVideoFrame() {
+    public void _saveVideoFrame() {
         mVideoWriter.write(mCurrentRGBA);
     }
 
-    public void _saveROI() {
+    public void saveROI() {
         // Ensures at least 2 frames in buffer
         if(mROIFrameBuffer.size() < 2) return;
 
@@ -383,35 +373,25 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         // Get frames' difference
         Core.subtract(ROIFrame2, ROIFrame1, ROIResult);
 
-//        List<Mat> bgr = new ArrayList<Mat>(3);
-//        Core.split(ROIResult, bgr);
-        // DCT
-        Mat ROIGray = new Mat();
-        Imgproc.cvtColor(ROIResult, ROIGray, Imgproc.COLOR_RGBA2GRAY);
-
-        int m = Core.getOptimalDFTSize(ROIGray.rows());
-        int n = Core.getOptimalDFTSize(ROIGray.cols());
-
-        Mat padded = new Mat();
-        Core.copyMakeBorder(ROIGray, padded, 0, m - ROIGray.rows(), 0, n - ROIGray.cols(), Core.BORDER_CONSTANT, Scalar.all(0));
-        padded.convertTo(padded, CvType.CV_32F, 1./255, 0);
-
-        Mat ROIDCT = new Mat();
-        Core.dct(padded, ROIDCT);
-        // Should we process B and R separated?
-        // Use forehead as ROI
+        // DCT red/blue
+        ArrayList<Mat> dcts = _getDCT(ROIResult);
 
         // Diagonal traverse
-        double[] diagTraverse = _ZigZag(ROIDCT);
-        // put 0 in the last 20% values
-        for (int i = (int)(0.8*diagTraverse.length+1); i < diagTraverse.length; i++) {
+        ArrayList<ArrayList<Double>> peaksPanels = new ArrayList<>();
+        for(int i = 0; i < dcts.size(); i++) {
+            double[] diagTraverse = _ZigZag(dcts.get(i));
+
+            // put 0 in the last 20% values
+            for (int j = (int)(0.8*diagTraverse.length+1); j < diagTraverse.length; j++) {
 //            Log.d(TAG, "Before: "+diagTraverse[i]);
-            diagTraverse[i] = 0;
+                diagTraverse[j] = 0;
 //            Log.d(TAG, "After: "+diagTraverse[i]);
+            }
+            ArrayList<Double> peaks = _getPeaks(diagTraverse);
+            peaksPanels.add(peaks);
         }
 
-        ArrayList<Double> peaks = _getPeaks(diagTraverse);
-        double stO2 = _getSaturation(peaks);
+        double stO2 = _getSaturation(peaksPanels.get(0), peaksPanels.get(1));
 
         // save array into file
 //        StringBuilder log = new StringBuilder();
@@ -499,6 +479,34 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 }
         );
         mVideoCameraButton.setColorFilter(Color.WHITE);
+    }
+
+    public ArrayList<Mat> _getDCT(Mat frame) {
+        ArrayList<Mat> dcts = new ArrayList<>();
+        List<Mat> bgr = new ArrayList<Mat>(3);
+        Core.split(frame, bgr);
+
+        ArrayList<Mat> planes = new ArrayList<Mat>();
+        planes.add(bgr.get(2));
+        planes.add(bgr.get(0));
+
+//        Mat ROIGray = new Mat();
+//        Imgproc.cvtColor(ROIResult, ROIGray, Imgproc.COLOR_RGBA2GRAY);
+
+        int m = Core.getOptimalDFTSize(frame.rows());
+        int n = Core.getOptimalDFTSize(frame.cols());
+
+        for(int i = 0; i < 2; i++) {
+            Mat padded = new Mat();
+            Core.copyMakeBorder(planes.get(i), padded, 0, m - frame.rows(), 0, n - frame.cols(), Core.BORDER_CONSTANT, Scalar.all(0));
+            padded.convertTo(padded, CvType.CV_32F, 1./255, 0);
+
+            Mat ROIDCT = new Mat();
+            Core.dct(padded, ROIDCT);
+            dcts.add(ROIDCT);
+        }
+
+        return dcts;
     }
 
     public double[] _ZigZag(Mat matrix) {
@@ -608,20 +616,29 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         return peaks;
     }
 
-    public double _getSaturation(ArrayList<Double> peaks) {
+    public double _getSaturation(ArrayList<Double> peaksRed, ArrayList<Double> peaksBlue) {
         // DC
-        double dc = peaks.get(0);
+        double dcRed = peaksRed.get(0);
+        double dcBlue = peaksBlue.get(0);
+
 //        Log.d(TAG, "DC " + dc);
         // AC
-        double ac = 0;
-        for(int i = 1; i < peaks.size(); i++) {
+        double acRed = 0;
+        double acBlue = 0;
+        for(int i = 1; i < peaksRed.size(); i++) {
 //            Log.d(TAG, "Peak "+i+": "+peaks.get(i));
-            ac += peaks.get(i);
+            acRed += peaksRed.get(i);
         }
-        ac /= peaks.size();
+        acRed /= peaksRed.size();
+
+        for(int i = 1; i < peaksBlue.size(); i++) {
+            acBlue += peaksBlue.get(i);
+        }
+        acBlue /= peaksBlue.size();
+
 //        Log.d(TAG, "AC " + ac);
         // R
-        double R = dc/ac;
+        double R = (dcRed/acRed)/(dcBlue/acBlue);
         // StO2
         double stO2 = 100 - R * 0.015;
         Log.d(TAG, "SatO2 " + stO2);
