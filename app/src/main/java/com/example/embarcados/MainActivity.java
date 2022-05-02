@@ -38,6 +38,7 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
@@ -64,6 +65,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     private static final Scalar ROI_RECT_COLOR = new Scalar(0, 0, 255, 255);
 
     private CameraBridgeViewBase mOpenCvCameraView;
+    private TextView mScoreText;
     private boolean mIsJavaCamera = true;
     private MenuItem mItemSwitchCamera = null;
 
@@ -80,6 +82,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     private int                    mAbsoluteFaceSize   = 0;
     private Rect mROIRect;
     private Queue<Mat> mROIFrameBuffer;
+    private Mat mROItoStore;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -96,6 +99,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                     mVideoWriter = new VideoWriter();
                     mROIRect = new Rect();
                     mROIFrameBuffer = new LinkedList<Mat>();
+                    mROItoStore = null;
 
                     // Load native library after(!) OpenCV initialization
                     System.loadLibrary("detection_based_tracker");
@@ -163,6 +167,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         mVideoCameraButton = (ImageView) findViewById(R.id.video_button);
 
+        mScoreText = (TextView) findViewById(R.id.textView);
         // Permits us to make image processing before saving
 //        mRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
 //        mRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
@@ -285,6 +290,13 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             _saveVideoFrame();
         }
 
+        // Display saturation
+        if(mROIFrameBuffer.size() >= 2) {
+            double sat = getSaturation();
+            String str = String.format("StO2: %.2f", sat);
+            mScoreText.setText(str);
+        }
+
         return mCurrentRGBA;
     }
 
@@ -348,8 +360,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     }
 
     public void saveROI() {
-        // Ensures at least 2 frames in buffer
-        if(mROIFrameBuffer.size() < 2) return;
+        if(mROItoStore == null) return;
 
         SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault());
         String curDateTime = sdf.format(new Date());
@@ -365,34 +376,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
 
-        // Get frame
-        Mat ROIFrame1 = mROIFrameBuffer.remove();
-        Mat ROIFrame2 = mROIFrameBuffer.remove();
-        Mat ROIResult = new Mat();
-
-        // Get frames' difference
-        Core.subtract(ROIFrame2, ROIFrame1, ROIResult);
-
-        // DCT red/blue
-        ArrayList<Mat> dcts = _getDCT(ROIResult);
-
-        // Diagonal traverse
-        ArrayList<ArrayList<Double>> peaksPanels = new ArrayList<>();
-        for(int i = 0; i < dcts.size(); i++) {
-            double[] diagTraverse = _ZigZag(dcts.get(i));
-
-            // put 0 in the last 20% values
-            for (int j = (int)(0.8*diagTraverse.length+1); j < diagTraverse.length; j++) {
-//            Log.d(TAG, "Before: "+diagTraverse[i]);
-                diagTraverse[j] = 0;
-//            Log.d(TAG, "After: "+diagTraverse[i]);
-            }
-            ArrayList<Double> peaks = _getPeaks(diagTraverse);
-            peaksPanels.add(peaks);
-        }
-
-        double stO2 = _getSaturation(peaksPanels.get(0), peaksPanels.get(1));
-
         // save array into file
 //        StringBuilder log = new StringBuilder();
 //        for (double v : diagTraverse) {
@@ -406,9 +389,9 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
             MatOfByte matOfByte = new MatOfByte();
 
-            Imgproc.cvtColor(ROIResult, ROIResult, Imgproc.COLOR_RGBA2BGR);
+            Imgproc.cvtColor(mROItoStore, mROItoStore, Imgproc.COLOR_RGBA2BGR);
 
-            Imgcodecs.imencode(".jpg", ROIResult, matOfByte);
+            Imgcodecs.imencode(".jpg", mROItoStore, matOfByte);
             os.write(matOfByte.toArray());
 
             os.close();
@@ -425,7 +408,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             System.exit(0);
         }
 
-        mROIFrameBuffer.clear();
+        mROItoStore = null;
     }
 
     public void _openVideoFile() {
@@ -616,7 +599,39 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         return peaks;
     }
 
-    public double _getSaturation(ArrayList<Double> peaksRed, ArrayList<Double> peaksBlue) {
+    public double getSaturation() {
+        // Get frame
+        Mat ROIFrame1 = mROIFrameBuffer.remove();
+        Mat ROIFrame2 = mROIFrameBuffer.remove();
+        Mat ROIResult = new Mat();
+
+        // Get frames' difference
+        Core.subtract(ROIFrame2, ROIFrame1, ROIResult);
+
+        // Copy to save in store.
+        mROItoStore = ROIResult;
+
+        // DCT red/blue
+        ArrayList<Mat> dcts = _getDCT(ROIResult);
+
+        // Diagonal traverse
+        ArrayList<ArrayList<Double>> peaksPanels = new ArrayList<>();
+        for(int i = 0; i < dcts.size(); i++) {
+            double[] diagTraverse = _ZigZag(dcts.get(i));
+
+            // put 0 in the last 20% values
+            for (int j = (int)(0.8*diagTraverse.length+1); j < diagTraverse.length; j++) {
+//            Log.d(TAG, "Before: "+diagTraverse[i]);
+                diagTraverse[j] = 0;
+//            Log.d(TAG, "After: "+diagTraverse[i]);
+            }
+            ArrayList<Double> peaks = _getPeaks(diagTraverse);
+            peaksPanels.add(peaks);
+        }
+
+        ArrayList<Double> peaksRed = peaksPanels.get(0);
+        ArrayList<Double> peaksBlue = peaksPanels.get(1);
+
         // DC
         double dcRed = peaksRed.get(0);
         double dcBlue = peaksBlue.get(0);
