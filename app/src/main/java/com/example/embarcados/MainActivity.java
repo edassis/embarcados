@@ -47,7 +47,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -82,7 +81,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     private int                    mAbsoluteFaceSize   = 0;
     private Rect mROIRect;
     private Queue<Mat> mROIFrameBuffer;
-    private Mat mROItoStore;
+    private Mat mROIToStore;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -99,7 +98,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                     mVideoWriter = new VideoWriter();
                     mROIRect = new Rect();
                     mROIFrameBuffer = new LinkedList<Mat>();
-                    mROItoStore = null;
+                    mROIToStore = null;
 
                     // Load native library after(!) OpenCV initialization
                     System.loadLibrary("detection_based_tracker");
@@ -294,7 +293,9 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         if(mROIFrameBuffer.size() >= 2) {
             double sat = getSaturation();
             String str = String.format("StO2: %.2f", sat);
-            mScoreText.setText(str);
+            int font = Imgproc.FONT_HERSHEY_SIMPLEX;
+            Imgproc.putText(mCurrentRGBA, str, new Point(20, 40), font, 1, new Scalar(247, 247, 73), 2);
+//            mScoreText.setText(str);
         }
 
         return mCurrentRGBA;
@@ -360,7 +361,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     }
 
     public void saveROI() {
-        if(mROItoStore == null) return;
+        if(mROIToStore == null) return;
 
         SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy_HH-mm-ss", Locale.getDefault());
         String curDateTime = sdf.format(new Date());
@@ -389,9 +390,9 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
             MatOfByte matOfByte = new MatOfByte();
 
-            Imgproc.cvtColor(mROItoStore, mROItoStore, Imgproc.COLOR_RGBA2BGR);
+            Imgproc.cvtColor(mROIToStore, mROIToStore, Imgproc.COLOR_RGBA2BGR);
 
-            Imgcodecs.imencode(".jpg", mROItoStore, matOfByte);
+            Imgcodecs.imencode(".jpg", mROIToStore, matOfByte);
             os.write(matOfByte.toArray());
 
             os.close();
@@ -408,7 +409,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             System.exit(0);
         }
 
-        mROItoStore = null;
+        mROIToStore = null;
     }
 
     public void _openVideoFile() {
@@ -590,7 +591,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         ArrayList<Double> peaks = new ArrayList<Double>();
         for(int idx : peaks_idx) {
-            Log.d(TAG, "Peaks: "+diagTraverse[idx]);
+//            Log.d(TAG, "Peaks: "+diagTraverse[idx]);
             peaks.add(diagTraverse[idx]);
         }
         // peaks on descending order
@@ -608,8 +609,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         // Get frames' difference
         Core.subtract(ROIFrame2, ROIFrame1, ROIResult);
 
-        // Copy to save in store.
-        mROItoStore = ROIResult;
+        // Copy to future store.
+        mROIToStore = ROIResult;
 
         // DCT red/blue
         ArrayList<Mat> dcts = _getDCT(ROIResult);
@@ -656,7 +657,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         double R = (dcRed/acRed)/(dcBlue/acBlue);
         // StO2
         double stO2 = 100 - R * 0.015;
-        Log.d(TAG, "SatO2 " + stO2);
+//        Log.d(TAG, "SatO2 " + stO2);
 
         return stO2;
     }

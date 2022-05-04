@@ -21,7 +21,7 @@
                 android:text="StO2"
                 android:translationX="4dp"
                 android:translationY="4dp"
-                android:visibility="visible" />
+                android:visibility="invisible" />
 
             <ImageView
                 android:id="@+id/video_button"
